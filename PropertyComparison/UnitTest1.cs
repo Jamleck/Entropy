@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -151,6 +152,7 @@ namespace PropertyComparison
             Assert.IsFalse(user1 == user2);
             Assert.IsTrue(user1 != user2);
             Assert.IsTrue(user1 == null);
+            Assert.IsTrue(user1 == user1);
         }
     }
 
@@ -171,8 +173,9 @@ namespace PropertyComparison
 
     public class PropertyObject : IEquatable<PropertyObject>
     {
-        private List<PropertyInfo> _properties;
-        private List<FieldInfo> _fields;
+
+        private static readonly ConcurrentDictionary<Type, IReadOnlyCollection<PropertyInfo>> Properties = new ConcurrentDictionary<Type, IReadOnlyCollection<PropertyInfo>>();
+        private static readonly ConcurrentDictionary<Type, IReadOnlyCollection<FieldInfo>> Fields = new ConcurrentDictionary<Type, IReadOnlyCollection<FieldInfo>>();
 
         public bool Equals(PropertyObject obj)
         {
@@ -181,6 +184,8 @@ namespace PropertyComparison
 
         public override bool Equals(object obj)
         {
+            if (ReferenceEquals(this, obj)) return true;
+            if (ReferenceEquals(null, obj)) return false;
             if (obj == null || GetType() != obj.GetType()) return false;
 
             var properties = GetProperties();
@@ -211,23 +216,19 @@ namespace PropertyComparison
 
         private IEnumerable<PropertyInfo> GetProperties()
         {
-            if (_properties == null)
-            {
-                _properties = GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public).ToList();
-            }
 
-            return _properties;
+            return Properties.GetOrAdd(GetType(),
+              t => t
+                  .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+                  .ToList());
         }
 
 
         private IEnumerable<FieldInfo> GetFields()
         {
-            if (_fields == null)
-            {
-                _fields = GetType().GetFields(BindingFlags.Instance | BindingFlags.Public).ToList();
-            }
 
-            return _fields;
+            return Fields.GetOrAdd(GetType(), t => t.GetFields(BindingFlags.Instance | BindingFlags.Public).ToList());
+
         }
 
         public override int GetHashCode()
